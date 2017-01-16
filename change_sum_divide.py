@@ -111,21 +111,33 @@ def sum(yesterday_file_final, changed_file, summed_file):
 
     res.sort_index(level=1, inplace=True)
 
+    
     # Delete the duplicate stock
-    row_num = 0
-    pre_index = 0
-    del_list = []
-    for this_index, row in res.iterrows():
-        # print this_index
-        if pre_index == this_index[1]:
-            for i in range(len(res.columns)):
-                res.iloc[row_num - 1, i] += res.iloc[row_num, i]
-            del_list.append(row_num)
-        row_num = row_num + 1
-        pre_index = this_index[1]
-    res.drop(res.index[del_list], inplace=True)
+    tmp = res.reset_index().copy()
+    tmp = tmp[["stockname","stockcode"]].groupby("stockcode").first()
+    res = res.groupby(level=[1]).sum()
+    res = pd.concat([res, tmp], axis=1, join="outer")
+    res.reset_index(inplace=True)
+    res.set_index(["stockname","stockcode"], inplace=True)
 
+
+    # Delete the duplicate stock
+    # row_num = 0
+    # pre_index = 0
+    # del_list = []
+    # for this_index, row in res.iterrows():
+    #     # print this_index
+    #     if pre_index == this_index[1]:
+    #         for i in range(len(res.columns)):
+    #             res.iloc[row_num - 1, i] += res.iloc[row_num, i]
+    #         del_list.append(row_num)
+    #     row_num = row_num + 1
+    #     pre_index = this_index[1]
+    # res.drop(res.index[del_list], inplace=True)
+
+    # Join together
     yesterday_df.set_index(["stockname", "stockcode"], inplace=True)
+    # print yesterday_df
     for col in yesterday_df.columns:
         if col in ['stockname', 'available_num', 'unalocated_num'] or col[0:4] == 'from':
             yesterday_df.drop(col, axis=1, inplace=True)
@@ -155,9 +167,9 @@ def divide(summed_file, divided_file):
 
     # acc: the accounts' columns
     acc = []
-    for i in df.columns:
-        if i.startswith("from"):
-            acc.append(i)
+    for col in df.columns:
+        if col.startswith("from"):
+            acc.append(col)
 
     user = pd.read_excel(summed_file, sheetname=0, header=0, parse_cols=[
                          0, 1] + range(5 + len(acc), len(df.columns) + 2), index_col=[0, 1])
@@ -167,25 +179,26 @@ def divide(summed_file, divided_file):
     for i in range(len(acc)):
         acc2.append(pd.read_excel(summed_file, sheetname=0, header=0, parse_cols=[
                     0, 1] + [i + 5] + range(5 + len(acc), len(df.columns) + 2), index_col=[0, 1]))
-        for j in range(len(acc2[i])):
-            for k in range(len(acc2[i].columns) - 1):
-                acc2[i].iloc[j, k + 1] = 0
+        for col in acc2[i].columns:
+            if col[0:4] != "from":
+                acc2[i][col] = 0
         acc2[i]["available_num"] = acc2[i][acc[i]]
+
 
     # Divide the stock into different accounts
     for i in range(len(df)):
         for j in range(len(user.columns)):
-            if user.iloc[i, j] > 0:
+            if user.iloc[i, j] >= 100:
                 for k in range(len(acc2)):
-                    if acc2[k].iloc[i, 0] > 0:
+                    if acc2[k].iloc[i, 0] >= 100:
                         if acc2[k].iloc[i, 0] >= user.iloc[i, j]:
-                            acc2[k].iloc[i, 0] -= user.iloc[i, j]
-                            acc2[k].iloc[i, j + 1] = user.iloc[i, j]
-                            user.iloc[i, j] = 0
+                            acc2[k].iloc[i, 0] -= user.iloc[i, j] / 100 * 100
+                            acc2[k].iloc[i, j + 1] = user.iloc[i, j] / 100 * 100
+                            user.iloc[i, j] = user.iloc[i, j] % 100
                         else:
-                            user.iloc[i, j] -= acc2[k].iloc[i, 0]
-                            acc2[k].iloc[i, j + 1] = acc2[k].iloc[i, 0]
-                            acc2[k].iloc[i, 0] = 0
+                            user.iloc[i, j] -= acc2[k].iloc[i, 0] / 100 * 100
+                            acc2[k].iloc[i, j + 1] = acc2[k].iloc[i, 0] / 100 * 100
+                            acc2[k].iloc[i, 0] = acc2[k].iloc[i, 0] % 100
 
     writer = pd.ExcelWriter(divided_file)
     for i in range(len(acc)):
