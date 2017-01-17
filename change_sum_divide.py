@@ -34,7 +34,8 @@ def change(today_position, change_files, changed_file):
             file_dict[file_name] = file_dict[file_name].loc[file_dict[file_name]["available_num"] < 0]
             file_dict[file_name] = file_dict[file_name][["available_num","stockhand"]]
             file_dict[file_name]["available_num"] *= 100
-            file_dict[file_name]["available_num"] = map(lambda x:int(x), file_dict[file_name]["available_num"])
+            file_dict[file_name]["available_num"] = file_dict[file_name]["available_num"].astype(int)
+
             
             tmp = df[file_name]["available_num"].add(file_dict[file_name]["available_num"], fill_value=0)
             miss_stock = [x for x in tmp[tmp<0].index]
